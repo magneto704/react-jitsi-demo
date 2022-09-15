@@ -79,6 +79,8 @@ const App = () => {
                       setMuted(!state.muted);
                     });
 
+                    externalApi.
+
                     externalApi.on("raiseHandUpdated", (state) => {
                       alert("มีผู้ประท้วง");
                     });
