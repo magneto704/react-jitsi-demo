@@ -5,7 +5,6 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions,
   Grid,
   Container,
   TextField,
@@ -13,16 +12,31 @@ import {
   List,
   ListItem,
   ListItemText,
+  ListSubheader,
+  ListItemButton,
+  Divider,
 } from "@mui/material";
 
+import "./App.css";
+
 const App = () => {
+  const [participantNumber, setParticipantNumber] = React.useState(0);
   const [displayName, setDisplayName] = React.useState("วิชัย บุบผามะตะนัง");
   const [muted, setMuted] = React.useState(false);
   const [api, setApi] = React.useState(null);
-  const [participantsInfo, setParticipantsInfo] = React.useState(null);
+  const [participantsInfo, setParticipantsInfo] = React.useState([]);
 
   const handleExcuteCommand = (command) => {
     api.executeCommand(command);
+  };
+
+  const sendRequestApprove = (id) => {
+    console.log("Send", " ", id);
+    api.executeCommand(
+      "sendEndpointTextMessage",
+      id,
+      "{type: 'approve', message: 'ข้อประท้วง'}"
+    );
   };
 
   // open dialog
@@ -41,11 +55,14 @@ const App = () => {
                 <Typography variant="body1">
                   สถานะไมค์ : {muted ? "เปิดไมค์" : "ปิดไมค์"}
                 </Typography>
+                <Typography variant="body1">
+                  จำนวนผู้เข้าร่วมประชุม :{participantNumber}
+                </Typography>
               </Grid>
               <Grid item xs={12}>
                 <JitsiMeeting
                   domain={`testjitsi.ddns.net`}
-                  roomName="react_demo"
+                  roomName="demo"
                   configOverwrite={{
                     startWithAudioMuted: true,
                     disableModeratorIndicator: false,
@@ -53,36 +70,73 @@ const App = () => {
                     enableEmailInStats: false,
                     disableSelfView: false,
                     apiLogLevels: ["warn"],
+                    disableFilmstripAutohiding: true,
                     filmstrip: {
                       disableResizable: true,
                       disableStageFilmstrip: true,
-                      disableFilmstripAutohiding: false,
                       doNotFlipLocalVideo: true,
                     },
                   }}
                   spinner={() => <h1>รอสักครู่....</h1>}
                   interfaceConfigOverwrite={{
-                    VIDEO_LAYOUT_FIT: "nocrop",
+                    VIDEO_LAYOUT_FIT: "height",
                     DISABLE_JOIN_LEAVE_NOTIFICATIONS: true,
                     // TILE_VIEW_MAX_COLUMNS: 1,
                     CLOSE_PAGE_GUEST_HINT: true,
                     HIDE_INVITE_MORE_HEADER: true,
                     // DEFAULT_BACKGROUND: "#BDF0FF",
-                    // VERTICAL_FILMSTRIP: false,
+                    VERTICAL_FILMSTRIP: false,
                   }}
                   userInfo={{
                     email: "wichai.b@lexnetix.co.th",
                     displayName,
                   }}
-                  onApiReady={async (externalApi) => {
+                  onApiReady={(externalApi) => {
                     externalApi.on("audioMuteStatusChanged", (state) => {
                       setMuted(!state.muted);
                     });
 
-                    externalApi.
+                    // ตัวเราเข้าประชุม
+                    externalApi.on("videoConferenceJoined", (state) => {
+                      // เพิ่มรายชือผู้เข้ารวมประชุม
+                      setParticipantsInfo(externalApi.getParticipantsInfo());
+
+                      const numberOfParticipants =
+                        externalApi.getNumberOfParticipants();
+                      setParticipantNumber(numberOfParticipants);
+
+                      externalApi.executeCommand("toggleTileView");
+                    });
+
+                    // สมาชิก เข้า - ออก
+                    externalApi.on("participantJoined", (state) => {
+                      // เพิ่มรายชือผู้เข้ารวมประชุม
+                      setParticipantsInfo(externalApi.getParticipantsInfo());
+
+                      const numberOfParticipants =
+                        externalApi.getNumberOfParticipants();
+                      setParticipantNumber(numberOfParticipants);
+                    });
+
+                    externalApi.on("participantLeft", (state) => {
+                      // ลบรายชือผู้เข้ารวมประชุม
+                      setParticipantsInfo(externalApi.getParticipantsInfo());
+
+                      const numberOfParticipants =
+                        externalApi.getNumberOfParticipants();
+                      setParticipantNumber(numberOfParticipants);
+                    });
+
+                    // รับข้อความ
+                    externalApi.on("endpointTextMessageReceived", (state) => {
+                      alert(JSON.stringify(state.data.eventData.text));
+                    });
 
                     externalApi.on("raiseHandUpdated", (state) => {
-                      alert("มีผู้ประท้วง");
+                      const id = state.id;
+                      alert(
+                        externalApi.getDisplayName(id) + " ->  ยกมือประท้วง"
+                      );
                     });
 
                     // const displayName = externalApi.getDisplayName(participantId);
@@ -96,17 +150,17 @@ const App = () => {
                       toolbarButtons: [],
                     });
 
+                    externalApi.executeCommand("toggleParticipantsPane", false);
+
                     // here you can attach custom event listeners to the Jitsi Meet External API
                     // you can also store it locally to execute commands
                     setApi(externalApi);
-
-                    const api = await externalApi.getParticipantsInfo();
-                    console.warn(api);
                   }}
                   getIFrameRef={(iframeRef) => {
                     iframeRef.style.height = "80vh";
                   }}
                 />
+                {/* <div id="jitisMeeing-2">{api.getIFrame()}</div> */}
               </Grid>
               <Grid item xs={12} container columnGap={2}>
                 <Button
@@ -142,17 +196,26 @@ const App = () => {
               </Grid>
             </Grid>
             <Grid item xs={2}>
-              <List>
-                {(participantsInfo ? participantsInfo.participants : []).map(
+              <List
+                subheader={
+                  <ListSubheader component="div">
+                    รายชื่อผู้ประชุม
+                  </ListSubheader>
+                }
+              >
+                {(participantsInfo ? participantsInfo : []).map(
                   (data, index) => {
                     return (
                       <React.Fragment key={index}>
-                        <ListItem>
+                        <ListItemButton
+                          onClick={() => sendRequestApprove(data.participantId)}
+                        >
                           <ListItemText
-                            primary={data.displayName}
-                            secondary={data.id}
+                            primary={data.formattedDisplayName}
+                            secondary={data.participantId}
                           />
-                        </ListItem>
+                        </ListItemButton>
+                        <Divider />
                       </React.Fragment>
                     );
                   }
